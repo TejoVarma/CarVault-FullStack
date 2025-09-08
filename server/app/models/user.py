@@ -1,4 +1,3 @@
-# app/models/user.py - Final User Model
 import uuid
 from sqlalchemy import Boolean, Column, String, DateTime
 from sqlalchemy.dialects.postgresql import UUID

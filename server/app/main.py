@@ -1,4 +1,3 @@
-# app/main.py - Complete FastAPI App with 24-hour JWT Authentication
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import os
