@@ -1,4 +1,3 @@
-# app/utils/security.py
 import os
 import bcrypt
 from datetime import datetime, timedelta

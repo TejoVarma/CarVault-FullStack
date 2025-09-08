@@ -1,4 +1,3 @@
-# app/schemas/auth.py
 from pydantic import BaseModel, EmailStr, validator
 from typing import Optional
 from datetime import datetime
