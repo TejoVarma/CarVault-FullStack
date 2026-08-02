@@ -10,23 +10,29 @@ aau_token
 envs/
 
 # ===== PYTHON =====
+# Anchored to repo root (leading /) — these are generic Python venv/build
+# directory names that would otherwise also match legitimate source dirs
+# elsewhere in the repo, e.g. client/src/lib/ (a real bug this caused:
+# client/src/lib/*.ts were silently untracked until this was anchored).
+# The actual Python env lives entirely under server/.conda/, already
+# covered by the .conda/ rule above.
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-build/
-develop-eggs/
-dist/
+/build/
+/develop-eggs/
+/dist/
 downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
+/eggs/
+/.eggs/
+/lib/
+/lib64/
+/parts/
+/sdist/
+/var/
+/wheels/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
