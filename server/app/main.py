@@ -1,24 +1,17 @@
-"""
-Changes needed in main.py file
+from dotenv import load_dotenv
 
-Add these imports at the top of your main.py file:
-"""
+# Must run before any app module that reads env vars at import time (e.g. app.database)
+load_dotenv()
 
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 import os
-from dotenv import load_dotenv
 from app.database import engine, Base
 from app.routers import auth
-
-# ADD THESE NEW IMPORTS:
 from app.utils.auth_deps import get_current_user, get_current_admin, get_optional_user
 
-# Load environment variables
-load_dotenv()
-
-# ✨ Create all database tables
+# Create all database tables
 Base.metadata.create_all(bind=engine)
 
 # Create FastAPI application with environment-based configuration
@@ -142,13 +135,14 @@ def health_check():
     Health check endpoint - Tests database connectivity and authentication system
     """
     try:
+        from sqlalchemy import text
         from app.database import SessionLocal
         from app.models.user import User
 
         # Test database connection and get metrics
         with SessionLocal() as db:
             # Basic connectivity test
-            db.execute("SELECT 1")
+            db.execute(text("SELECT 1"))
 
             # Get user statistics
             total_users = db.query(User).count()
