@@ -5,8 +5,15 @@ import os
 from dotenv import load_dotenv
 from app.database import get_db
 from app.models.user import User
-from app.schemas.auth import UserRegister, UserLogin, LoginResponse, UserResponse
+from app.schemas.auth import (
+    UserRegister,
+    UserLogin,
+    LoginResponse,
+    UserResponse,
+    BusinessProfileCreate,
+)
 from app.utils.security import PasswordHasher, JWTManager, create_user_token_data
+from app.utils.auth_deps import get_current_user
 
 # Load environment variables
 load_dotenv()
@@ -40,12 +47,18 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
         )
 
-    # For admin registration, phone should be provided (UI validation)
-    if user_data.is_admin and not user_data.phone:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Phone number is required for admin accounts",
-        )
+    # Determine initial roles based on the chosen role at signup
+    if user_data.initial_role == "car_owner":
+        if not user_data.phone:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Phone number is required for car owner accounts",
+            )
+        initial_roles = ["customer", "car_owner"]
+        date_became_car_owner = datetime.utcnow()
+    else:
+        initial_roles = ["customer"]
+        date_became_car_owner = None
 
     # Hash password securely
     hashed_password = PasswordHasher.hash_password(user_data.password)
@@ -57,7 +70,9 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
         first_name=user_data.first_name,
         last_name=user_data.last_name,
         phone=user_data.phone,
-        is_admin=user_data.is_admin,
+        roles=initial_roles,
+        business_verified=False,
+        date_became_car_owner=date_became_car_owner,
     )
 
     # Save to database
@@ -65,19 +80,9 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
 
-    # Return user data (no sensitive information)
-    return UserResponse(
-        id=str(new_user.id),
-        email=new_user.email,
-        first_name=new_user.first_name,
-        last_name=new_user.last_name,
-        full_name=new_user.full_name,
-        phone=new_user.phone,
-        is_admin=new_user.is_admin,
-        is_active=new_user.is_active,
-        created_at=new_user.created_at,
-        last_login=new_user.last_login,
-    )
+    # Return user data (no sensitive information); model_validate picks up
+    # is_customer/is_car_owner/business_name from the User model's properties
+    return UserResponse.model_validate(new_user)
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -126,18 +131,7 @@ async def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
         access_token=access_token,
         token_type="bearer",
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Convert minutes to seconds
-        user=UserResponse(
-            id=str(user.id),
-            email=user.email,
-            first_name=user.first_name,
-            last_name=user.last_name,
-            full_name=user.full_name,
-            phone=user.phone,
-            is_admin=user.is_admin,
-            is_active=user.is_active,
-            created_at=user.created_at,
-            last_login=user.last_login,
-        ),
+        user=UserResponse.model_validate(user),
     )
 
 
@@ -169,9 +163,67 @@ async def verify_token(token: str):
             "valid": True,
             "user_id": payload.get("user_id"),
             "email": payload.get("email"),
-            "is_admin": payload.get("is_admin"),
+            "roles": payload.get("roles"),
             "expires_at": datetime.fromtimestamp(payload.get("exp")),
             "issued_at": datetime.fromtimestamp(payload.get("iat")),
         }
     except HTTPException:
         return {"valid": False, "message": "Invalid or expired token"}
+
+
+@router.post("/become-car-owner")
+async def become_car_owner(
+    business_data: BusinessProfileCreate,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Upgrade the current (customer) account to also hold the car_owner role.
+
+    - **business_name**, **business_phone**: required
+    - **business_description**, **pickup_instructions**: optional
+    """
+    user = db.query(User).filter(User.id == current_user["id"]).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if user.has_role("car_owner"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Already a car owner"
+        )
+
+    user.add_role("car_owner")
+    user.business_profile = {
+        "business_info": {
+            "business_name": business_data.business_name,
+            "business_description": business_data.business_description,
+            "business_phone": business_data.business_phone,
+        },
+        "rental_policies": {
+            "pickup_instructions": business_data.pickup_instructions,
+        },
+    }
+    user.date_became_car_owner = datetime.utcnow()
+    user.business_verified = False
+
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "message": "Successfully upgraded to car owner",
+        "roles": user.roles,
+    }
+
+
+@router.get("/me", response_model=UserResponse)
+async def get_current_user_info(
+    current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """Get the current authenticated user's full profile, with role info."""
+    # current_user (from the dependency) is a fast, partial view built from
+    # the JWT + a minimal security-fields query — fetch the full row here
+    # since this endpoint's whole purpose is returning the complete profile.
+    user = db.query(User).filter(User.id == current_user["id"]).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return UserResponse.model_validate(user)

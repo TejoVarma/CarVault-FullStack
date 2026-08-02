@@ -127,7 +127,9 @@ def create_user_token_data(user) -> dict:
         "full_name": user.full_name,
         "first_name": user.first_name,
         "last_name": user.last_name,
-        "is_admin": user.is_admin,
+        "roles": user.roles,
+        "is_customer": user.is_customer,
+        "is_car_owner": user.is_car_owner,
         "is_active": user.is_active,
         "phone": user.phone,
     }

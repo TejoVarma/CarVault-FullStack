@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, validator
-from typing import Optional
+from typing import Optional, List, Dict
 from datetime import datetime
 
 
@@ -11,7 +11,13 @@ class UserRegister(BaseModel):
     first_name: str
     last_name: str
     phone: Optional[str] = None
-    is_admin: bool = False
+    initial_role: str = "customer"  # "customer" or "car_owner"
+
+    @validator("initial_role")
+    def validate_initial_role(cls, v):
+        if v not in ("customer", "car_owner"):
+            raise ValueError("Initial role must be 'customer' or 'car_owner'")
+        return v
 
     @validator("password")
     def validate_password(cls, v):
@@ -59,13 +65,55 @@ class UserResponse(BaseModel):
     last_name: str
     full_name: str
     phone: Optional[str]
-    is_admin: bool
+    roles: List[str]
     is_active: bool
     created_at: datetime
     last_login: Optional[datetime]
 
+    # Helper flags, computed from `roles` (see User model properties)
+    is_customer: bool = False
+    is_car_owner: bool = False
+    business_name: Optional[str] = None
+
+    @validator("id", pre=True)
+    def convert_id_to_str(cls, v):
+        # new_user.id is a Python UUID object (see models/user.py); model_validate()
+        # reads it as-is, unlike the old manual `str(new_user.id)` construction.
+        return str(v)
+
     class Config:
         from_attributes = True
+
+
+class BusinessProfileCreate(BaseModel):
+    """Schema for becoming a car owner"""
+
+    business_name: str
+    business_description: Optional[str] = None
+    business_phone: str
+    pickup_instructions: Optional[str] = None
+
+    @validator("business_name")
+    def validate_business_name(cls, v):
+        if len(v.strip()) < 2:
+            raise ValueError("Business name must be at least 2 characters")
+        return v.strip()
+
+
+class CustomerProfileUpdate(BaseModel):
+    """Schema for updating customer preferences"""
+
+    rental_preferences: Optional[Dict] = None
+    communication_preferences: Optional[Dict] = None
+
+
+class BusinessProfileUpdate(BaseModel):
+    """Schema for updating business profile"""
+
+    business_name: Optional[str] = None
+    business_description: Optional[str] = None
+    business_phone: Optional[str] = None
+    pickup_instructions: Optional[str] = None
 
 
 class LoginResponse(BaseModel):

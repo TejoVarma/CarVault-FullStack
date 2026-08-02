@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 import os
 from app.database import engine, Base
-from app.routers import auth
+from app.routers import auth, roles
 from app.utils.auth_deps import get_current_user, get_current_admin, get_optional_user
 
 # Create all database tables
@@ -83,6 +83,17 @@ app.include_router(
         400: {"description": "Bad Request - Invalid input data"},
         401: {"description": "Unauthorized - Invalid credentials"},
         422: {"description": "Validation Error - Check request format"},
+    },
+)
+
+# Include role management router
+app.include_router(
+    roles.router,
+    prefix="/roles",
+    tags=["👤 Role Management"],
+    responses={
+        401: {"description": "Unauthorized"},
+        403: {"description": "Insufficient permissions"},
     },
 )
 
@@ -213,13 +224,13 @@ async def get_user_profile(current_user: dict = Depends(get_current_user)):
             "email": current_user["email"],
             "full_name": current_user["full_name"],
             "phone": current_user["phone"],
-            "account_type": "Admin" if current_user["is_admin"] else "User",
+            "roles": current_user["roles"],
             "account_status": "Active" if current_user["is_active"] else "Inactive",
         },
         "capabilities": {
-            "can_book_cars": True,
-            "can_manage_cars": current_user["is_admin"],
-            "can_view_analytics": current_user["is_admin"],
+            "can_book_cars": current_user["is_customer"],
+            "can_manage_cars": current_user["is_car_owner"],
+            "can_view_analytics": current_user["is_car_owner"],
         },
     }
 
@@ -267,7 +278,7 @@ async def browse_cars(user: Optional[dict] = Depends(get_optional_user)):
             "message": f"Personalized car recommendations for {user['full_name']}",
             "user_context": {
                 "user_id": user["id"],
-                "account_type": "Admin" if user["is_admin"] else "User",
+                "roles": user["roles"],
                 "auth_status": user.get("auth_status", "authenticated"),
             },
             "cars": [],  # Will be populated with actual car data
