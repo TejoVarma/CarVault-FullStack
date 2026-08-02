@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import Optional
@@ -14,10 +14,17 @@ from app.schemas.auth import (
     BusinessProfileCreate,
 )
 from app.utils.security import PasswordHasher, JWTManager, create_user_token_data
-from app.utils.auth_deps import get_current_user, extract_token_from_header
+from app.utils.auth_deps import (
+    get_current_user,
+    extract_token_from_header,
+    ACCESS_TOKEN_COOKIE_NAME,
+)
 
 # Load environment variables
 load_dotenv()
+
+# Only send the cookie over HTTPS outside local development
+COOKIE_SECURE = os.getenv("ENVIRONMENT", "development") != "development"
 
 # Get token expiry from environment
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
@@ -88,14 +95,17 @@ async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
+async def login_user(credentials: UserLogin, response: Response, db: Session = Depends(get_db)):
     """
     Authenticate user and return JWT token
 
     - **email**: User's email address
     - **password**: User's password
 
-    Returns access token valid for 24 hours with user information
+    Returns access token valid for 24 hours with user information.
+    Also sets it as an httpOnly cookie, for browser frontends — the token
+    is still returned in the response body too, for API clients/testing
+    tools that use the Authorization header instead.
     """
 
     # Find user by email
@@ -127,6 +137,15 @@ async def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
     user.last_login = datetime.utcnow()
     db.commit()
 
+    response.set_cookie(
+        key=ACCESS_TOKEN_COOKIE_NAME,
+        value=access_token,
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite="lax",
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
+
     # Return token and user info
     return LoginResponse(
         message="Login successful - valid for 24 hours",
@@ -138,13 +157,16 @@ async def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
 
 
 @router.post("/logout")
-async def logout_user():
+async def logout_user(response: Response):
     """
-    Logout user (client should discard tokens)
+    Logout user: clears the auth cookie, and the client should also discard
+    any token it's holding directly (e.g. from the response body at login).
 
-    Note: JWT tokens are stateless, so server-side logout just returns success.
-    Client must remove tokens from storage.
+    Note: JWTs are stateless — the token itself remains technically valid
+    until it expires even after this call. This only removes where the
+    browser automatically finds it; it doesn't invalidate the token itself.
     """
+    response.delete_cookie(key=ACCESS_TOKEN_COOKIE_NAME)
     return {
         "message": "Logged out successfully",
         "detail": "Please remove token from client storage",
