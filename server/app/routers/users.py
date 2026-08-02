@@ -20,7 +20,7 @@ def get_profile(
     return UserProfile.model_validate(user)
 
 
-@router.put("/profile", response_model=UserProfile)
+@router.patch("/profile", response_model=UserProfile)
 def update_profile(
     profile_data: UserProfileUpdate,
     current_user: dict = Depends(get_current_user),
