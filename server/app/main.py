@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 import os
 from app.database import engine, Base
-from app.routers import auth
+from app.routers import auth, roles
 from app.utils.auth_deps import get_current_user, get_current_admin, get_optional_user
 
 # Create all database tables
@@ -86,6 +86,17 @@ app.include_router(
     },
 )
 
+# Include role management router
+app.include_router(
+    roles.router,
+    prefix="/roles",
+    tags=["👤 Role Management"],
+    responses={
+        401: {"description": "Unauthorized"},
+        403: {"description": "Insufficient permissions"},
+    },
+)
+
 
 # Root endpoint - UPDATED to show route protection info
 @app.get("/", tags=["📋 General"])
@@ -147,7 +158,8 @@ def health_check():
             # Get user statistics
             total_users = db.query(User).count()
             active_users = db.query(User).filter(User.is_active == True).count()
-            admin_users = db.query(User).filter(User.is_admin == True).count()
+            # .any(...) on an ARRAY column translates to 'car_owner' = ANY(users.roles)
+            car_owner_users = db.query(User).filter(User.roles.any("car_owner")).count()
 
         return {
             "status": "✅ healthy",
@@ -162,8 +174,11 @@ def health_check():
             "metrics": {
                 "total_users": total_users,
                 "active_users": active_users,
-                "admin_users": admin_users,
-                "regular_users": total_users - admin_users,
+                "car_owner_users": car_owner_users,
+                # roles aren't mutually exclusive (a user can be both), so
+                # this is "customers who are not also car owners", not a
+                # strict complement of car_owner_users
+                "customer_only_users": total_users - car_owner_users,
             },
             "configuration": {
                 "environment": os.getenv("ENVIRONMENT", "development"),
@@ -213,13 +228,13 @@ async def get_user_profile(current_user: dict = Depends(get_current_user)):
             "email": current_user["email"],
             "full_name": current_user["full_name"],
             "phone": current_user["phone"],
-            "account_type": "Admin" if current_user["is_admin"] else "User",
+            "roles": current_user["roles"],
             "account_status": "Active" if current_user["is_active"] else "Inactive",
         },
         "capabilities": {
-            "can_book_cars": True,
-            "can_manage_cars": current_user["is_admin"],
-            "can_view_analytics": current_user["is_admin"],
+            "can_book_cars": current_user["is_customer"],
+            "can_manage_cars": current_user["is_car_owner"],
+            "can_view_analytics": current_user["is_car_owner"],
         },
     }
 
@@ -267,7 +282,7 @@ async def browse_cars(user: Optional[dict] = Depends(get_optional_user)):
             "message": f"Personalized car recommendations for {user['full_name']}",
             "user_context": {
                 "user_id": user["id"],
-                "account_type": "Admin" if user["is_admin"] else "User",
+                "roles": user["roles"],
                 "auth_status": user.get("auth_status", "authenticated"),
             },
             "cars": [],  # Will be populated with actual car data

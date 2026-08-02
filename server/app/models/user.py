@@ -23,11 +23,6 @@ class User(Base):
     )  # Optional for users, required for admins (UI handles this)
 
     # === USER TYPE & STATUS ===
-    # is_admin is kept temporarily during the roles migration (Phase 2) —
-    # will be dropped in a follow-up migration once `roles` is fully wired up.
-    is_admin = Column(
-        Boolean, default=False, nullable=False, index=True
-    )  # False=User, True=Admin
     is_active = Column(
         Boolean, default=True, nullable=False, index=True
     )  # Account status
@@ -73,7 +68,7 @@ class User(Base):
     last_login = Column(DateTime, nullable=True)  # Track user activity
 
     def __repr__(self):
-        return f"<User(id={self.id}, email={self.email}, admin={self.is_admin})>"
+        return f"<User(id={self.id}, email={self.email}, roles={self.roles})>"
 
     @property
     def full_name(self):

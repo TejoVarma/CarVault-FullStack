@@ -83,12 +83,12 @@ def get_user_security_info(user_id: str, db: Session) -> Optional[dict]:
         db: Database session
 
     Returns:
-        dict: Security info (id, is_active, is_admin) or None if user not found
+        dict: Security info (id, is_active, roles) or None if user not found
     """
     try:
         # Query only security-critical fields for performance
         user_security = (
-            db.query(User.id, User.is_active, User.is_admin)
+            db.query(User.id, User.is_active, User.roles)
             .filter(User.id == user_id)
             .first()
         )
@@ -96,10 +96,13 @@ def get_user_security_info(user_id: str, db: Session) -> Optional[dict]:
         if not user_security:
             return None
 
+        roles = user_security.roles or []
         return {
             "id": str(user_security.id),
             "is_active": user_security.is_active,
-            "is_admin": user_security.is_admin,
+            "roles": roles,
+            "is_customer": "customer" in roles,
+            "is_car_owner": "car_owner" in roles,
         }
     except Exception:
         # Log error in production, return None for security
@@ -127,7 +130,9 @@ def create_user_response(jwt_payload: dict, security_info: dict) -> dict:
         "phone": jwt_payload.get("phone"),
         # Security data from DB (fresh, critical)
         "is_active": security_info["is_active"],
-        "is_admin": security_info["is_admin"],
+        "roles": security_info["roles"],
+        "is_customer": security_info["is_customer"],
+        "is_car_owner": security_info["is_car_owner"],
         # Metadata
         "auth_method": "jwt_bearer",
         "token_type": "access_token",
@@ -216,40 +221,49 @@ async def get_current_user(
         )
 
 
-async def get_current_admin(current_user: dict = Depends(get_current_user)) -> dict:
+async def get_current_customer(current_user: dict = Depends(get_current_user)) -> dict:
     """
-    Get current authenticated admin user
+    Get current authenticated user, requiring the 'customer' role.
 
-    This dependency builds on get_current_user() and adds admin verification.
-    It ensures the user has admin privileges for admin-only routes.
+    Usage:
+        @app.post("/bookings")
+        def create_booking(customer: dict = Depends(get_current_customer)):
+            ...
+    """
+    if not current_user.get("is_customer", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Customer access required for this operation",
+        )
+    return current_user
 
-    Args:
-        current_user: Current user from get_current_user dependency
 
-    Returns:
-        dict: Current admin user information
-
-    Raises:
-        HTTPException: 403 if user is not an admin
+async def get_current_car_owner(current_user: dict = Depends(get_current_user)) -> dict:
+    """
+    Get current authenticated user, requiring the 'car_owner' role.
 
     Usage:
         @app.post("/cars")
-        def add_car(admin: dict = Depends(get_current_admin)):
-            return f"Admin {admin['full_name']} can add cars"
+        def add_car(owner: dict = Depends(get_current_car_owner)):
+            return f"{owner['full_name']} can add cars"
     """
-
-    # Verify admin status (using fresh data from get_current_user)
-    if not current_user.get("is_admin", False):
+    if not current_user.get("is_car_owner", False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin privileges required for this operation",
+            detail="Car owner access required for this operation",
         )
 
-    # Add admin-specific metadata
-    current_user["role"] = "admin"
+    # Kept for compatibility with earlier admin-era route responses
+    current_user["role"] = "car_owner"
     current_user["permissions"] = ["manage_cars", "view_bookings", "manage_inventory"]
 
     return current_user
+
+
+# Backward-compatible alias: routes still written against "admin" now mean
+# "car owner" under the dual-role system (admin was never a separate
+# user-management role in this app — see plan_docs for the business rules).
+get_current_admin = get_current_car_owner
 
 
 async def get_optional_user(

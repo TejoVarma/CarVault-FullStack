@@ -105,7 +105,7 @@ class JWTManager:
         user_info = {
             "user_id": payload.get("user_id"),
             "email": payload.get("email"),
-            "is_admin": payload.get("is_admin", False),
+            "roles": payload.get("roles", []),
             "is_active": payload.get("is_active", True),
             "full_name": payload.get("full_name"),
         }
@@ -127,7 +127,9 @@ def create_user_token_data(user) -> dict:
         "full_name": user.full_name,
         "first_name": user.first_name,
         "last_name": user.last_name,
-        "is_admin": user.is_admin,
+        "roles": user.roles,
+        "is_customer": user.is_customer,
+        "is_car_owner": user.is_car_owner,
         "is_active": user.is_active,
         "phone": user.phone,
     }
