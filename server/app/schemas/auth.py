@@ -74,6 +74,7 @@ class UserResponse(BaseModel):
     is_customer: bool = False
     is_car_owner: bool = False
     business_name: Optional[str] = None
+    profile_picture_url: Optional[str] = None
 
     @validator("id", pre=True)
     def convert_id_to_str(cls, v):
