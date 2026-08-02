@@ -212,6 +212,9 @@ typings/
 *.seed
 *.pid.lock
 
+# ===== PLANNING DOCS (not for public repo yet) =====
+plan_docs/
+
 # ===== CAR RENTAL SPECIFIC =====
 # Payment gateway test files
 payment_logs/
