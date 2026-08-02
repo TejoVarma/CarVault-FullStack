@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 import os
+import app.utils.cloudinary_config  # noqa: F401 (side-effecting import: configures cloudinary from env)
 from app.database import engine, Base
 from app.routers import auth, roles, users
 from app.utils.auth_deps import get_current_user, get_current_admin, get_optional_user
@@ -107,6 +108,7 @@ app.include_router(
         404: {"description": "User not found"},
     },
 )
+
 
 
 # Root endpoint - UPDATED to show route protection info

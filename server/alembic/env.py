@@ -16,6 +16,7 @@ load_dotenv()
 
 from app.database import Base  # noqa: E402
 from app.models.user import User  # noqa: E402,F401 (import registers the model on Base.metadata)
+from app.models.photo import UserPhoto  # noqa: E402,F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
