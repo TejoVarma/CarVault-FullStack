@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 import os
 from app.database import engine, Base
-from app.routers import auth, roles
+from app.routers import auth, roles, users
 from app.utils.auth_deps import get_current_user, get_current_admin, get_optional_user
 
 # Create all database tables
@@ -94,6 +94,17 @@ app.include_router(
     responses={
         401: {"description": "Unauthorized"},
         403: {"description": "Insufficient permissions"},
+    },
+)
+
+# Include user profile management router
+app.include_router(
+    users.router,
+    prefix="/users",
+    tags=["👤 User Profile"],
+    responses={
+        401: {"description": "Unauthorized"},
+        404: {"description": "User not found"},
     },
 )
 

@@ -171,5 +171,34 @@ class UserProfile(BaseModel):
     updated_at: datetime
     last_login: Optional[datetime]
 
+    @validator("id", pre=True)
+    def convert_id_to_str(cls, v):
+        return str(v)
+
     class Config:
         from_attributes = True
+
+
+class UserProfileUpdate(BaseModel):
+    """Schema for updating editable profile fields (all optional — partial update)"""
+
+    phone: Optional[str] = None
+    date_of_birth: Optional[datetime] = None
+    profile_picture_url: Optional[str] = None
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    postal_code: Optional[str] = None
+    country: Optional[str] = None
+    emergency_contact_name: Optional[str] = None
+    emergency_contact_phone: Optional[str] = None
+    emergency_contact_relationship: Optional[str] = None
+
+    @validator("phone", "emergency_contact_phone")
+    def validate_phone_digits(cls, v):
+        if v is not None and v.strip():
+            cleaned = "".join(filter(str.isdigit, v))
+            if len(cleaned) < 10:
+                raise ValueError("Phone number must contain at least 10 digits")
+        return v

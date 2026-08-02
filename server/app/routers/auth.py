@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import datetime
+from typing import Optional
 import os
 from dotenv import load_dotenv
 from app.database import get_db
@@ -13,7 +14,7 @@ from app.schemas.auth import (
     BusinessProfileCreate,
 )
 from app.utils.security import PasswordHasher, JWTManager, create_user_token_data
-from app.utils.auth_deps import get_current_user
+from app.utils.auth_deps import get_current_user, extract_token_from_header
 
 # Load environment variables
 load_dotenv()
@@ -152,12 +153,15 @@ async def logout_user():
 
 
 @router.get("/verify-token")
-async def verify_token(token: str):
+async def verify_token(token: Optional[str] = Depends(extract_token_from_header)):
     """
-    Verify if a token is valid (for testing purposes)
+    Verify if the caller's token is valid (for testing purposes)
 
-    - **token**: JWT token to verify
+    Send the token the same way as any other protected route:
+    `Authorization: Bearer <token>` header — not as a query parameter.
     """
+    if not token:
+        return {"valid": False, "message": "No token provided"}
     try:
         payload = JWTManager.verify_token(token)
         return {
