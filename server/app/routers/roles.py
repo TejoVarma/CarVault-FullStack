@@ -9,7 +9,7 @@ from app.utils.auth_deps import get_current_customer, get_current_car_owner
 router = APIRouter()
 
 
-@router.put("/customer-profile")
+@router.patch("/customer-profile")
 def update_customer_profile(
     profile_data: CustomerProfileUpdate,
     current_customer: dict = Depends(get_current_customer),
@@ -36,7 +36,7 @@ def update_customer_profile(
     return {"message": "Customer profile updated"}
 
 
-@router.put("/business-profile")
+@router.patch("/business-profile")
 def update_business_profile(
     profile_data: BusinessProfileUpdate,
     current_car_owner: dict = Depends(get_current_car_owner),

@@ -23,12 +23,14 @@ Usage Examples:
 
 import os
 from typing import Optional
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
 from app.utils.security import JWTManager
+
+ACCESS_TOKEN_COOKIE_NAME = "access_token"
 
 # Security scheme for automatic Swagger/OpenAPI documentation
 security = HTTPBearer(
@@ -42,33 +44,40 @@ DEBUG_MODE = os.getenv("DEBUG", "False").lower() == "true"
 
 
 def extract_token_from_header(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> Optional[str]:
     """
-    Extract and validate JWT token from Authorization header
+    Extract the JWT token, checking the Authorization header first, then
+    falling back to the httpOnly cookie set by /auth/login.
+
+    This dual support exists deliberately: a browser frontend relies on the
+    cookie (attached automatically, no JS involvement), while API clients
+    and testing tools (curl, Postman, FastAPI's /docs "Authorize" button)
+    keep using the Authorization header exactly as before.
 
     Args:
-        credentials: FastAPI HTTPBearer credentials
+        request: the raw request, used to read cookies if no header is present
+        credentials: FastAPI HTTPBearer credentials, if an Authorization header was sent
 
     Returns:
-        str: Clean JWT token string, None if no credentials
+        str: Clean JWT token string, None if no credentials found anywhere
 
     Raises:
-        HTTPException: If token format is invalid
+        HTTPException: If an Authorization header is present but malformed
     """
-    if not credentials:
-        return None
+    if credentials:
+        # Validate token format
+        if credentials.scheme.lower() != "bearer":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication scheme. Use 'Bearer <token>'",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return credentials.credentials
 
-    # Validate token format
-    if credentials.scheme.lower() != "bearer":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication scheme. Use 'Bearer <token>'",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Return clean token
-    return credentials.credentials
+    # No header — fall back to the cookie
+    return request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)
 
 
 def get_user_security_info(user_id: str, db: Session) -> Optional[dict]:
