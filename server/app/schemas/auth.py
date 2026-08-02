@@ -154,7 +154,7 @@ class UserProfile(BaseModel):
     last_name: str
     full_name: str
     phone: Optional[str]
-    is_admin: bool
+    roles: List[str]
     is_active: bool
     date_of_birth: Optional[datetime]
     profile_picture_url: Optional[str]

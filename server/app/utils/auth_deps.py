@@ -83,7 +83,7 @@ def get_user_security_info(user_id: str, db: Session) -> Optional[dict]:
         db: Database session
 
     Returns:
-        dict: Security info (id, is_active, is_admin) or None if user not found
+        dict: Security info (id, is_active, roles) or None if user not found
     """
     try:
         # Query only security-critical fields for performance

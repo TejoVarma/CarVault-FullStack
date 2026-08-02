@@ -30,14 +30,15 @@ router = APIRouter()
 )
 async def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
     """
-    Register a new user (regular user or admin)
+    Register a new user (customer or car owner)
 
     - **email**: Must be unique and valid format
     - **password**: Must meet security requirements (8+ chars, uppercase, lowercase, digit)
     - **first_name**: User's first name
     - **last_name**: User's last name
-    - **phone**: Optional phone number (required for admins in UI)
-    - **is_admin**: Boolean flag to create admin user (from UI form selection)
+    - **phone**: Optional for customers, required for car owners
+    - **initial_role**: "customer" (default) or "car_owner" — every account is
+      always at least a customer; car_owner is an additional role on top
     """
 
     # Check if email already exists

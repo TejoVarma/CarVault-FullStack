@@ -158,7 +158,8 @@ def health_check():
             # Get user statistics
             total_users = db.query(User).count()
             active_users = db.query(User).filter(User.is_active == True).count()
-            admin_users = db.query(User).filter(User.is_admin == True).count()
+            # .any(...) on an ARRAY column translates to 'car_owner' = ANY(users.roles)
+            car_owner_users = db.query(User).filter(User.roles.any("car_owner")).count()
 
         return {
             "status": "✅ healthy",
@@ -173,8 +174,11 @@ def health_check():
             "metrics": {
                 "total_users": total_users,
                 "active_users": active_users,
-                "admin_users": admin_users,
-                "regular_users": total_users - admin_users,
+                "car_owner_users": car_owner_users,
+                # roles aren't mutually exclusive (a user can be both), so
+                # this is "customers who are not also car owners", not a
+                # strict complement of car_owner_users
+                "customer_only_users": total_users - car_owner_users,
             },
             "configuration": {
                 "environment": os.getenv("ENVIRONMENT", "development"),

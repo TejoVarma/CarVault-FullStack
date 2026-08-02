@@ -105,7 +105,7 @@ class JWTManager:
         user_info = {
             "user_id": payload.get("user_id"),
             "email": payload.get("email"),
-            "is_admin": payload.get("is_admin", False),
+            "roles": payload.get("roles", []),
             "is_active": payload.get("is_active", True),
             "full_name": payload.get("full_name"),
         }
