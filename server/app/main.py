@@ -5,12 +5,12 @@ load_dotenv()
 
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional
+from fastapi.responses import JSONResponse
 import os
 import app.utils.cloudinary_config  # noqa: F401 (side-effecting import: configures cloudinary from env)
 from app.database import engine, Base
-from app.routers import auth, roles, users
-from app.utils.auth_deps import get_current_user, get_current_admin, get_optional_user
+from app.routers import auth, roles, users, cars
+from app.utils.auth_deps import get_current_user, get_current_admin
 
 # Create all database tables
 Base.metadata.create_all(bind=engine)
@@ -109,6 +109,17 @@ app.include_router(
     },
 )
 
+# Include car inventory router
+app.include_router(
+    cars.router,
+    prefix="/cars",
+    tags=["🚗 Car Inventory"],
+    responses={
+        401: {"description": "Unauthorized"},
+        403: {"description": "Insufficient permissions"},
+        404: {"description": "Car not found"},
+    },
+)
 
 
 # Root endpoint - UPDATED to show route protection info
@@ -282,69 +293,40 @@ async def admin_dashboard(current_admin: dict = Depends(get_current_admin)):
     }
 
 
-@app.get("/cars", tags=["🚗 Car Browsing"])
-async def browse_cars(user: Optional[dict] = Depends(get_optional_user)):
-    """
-    Browse available cars with optional personalization
-
-    **Requires**: No authentication (public endpoint)
-    **Enhanced**: For logged-in users with personalized recommendations
-    """
-    if user:
-        return {
-            "message": f"Personalized car recommendations for {user['full_name']}",
-            "user_context": {
-                "user_id": user["id"],
-                "roles": user["roles"],
-                "auth_status": user.get("auth_status", "authenticated"),
-            },
-            "cars": [],  # Will be populated with actual car data
-            "recommendations": "Based on your booking history and preferences",
-            "features": ["Save favorites", "Quick booking", "Price alerts"],
-        }
-    else:
-        return {
-            "message": "Browse all available cars",
-            "user_context": "anonymous",
-            "cars": [],  # Will be populated with actual car data
-            "suggestions": [
-                "Sign up for personalized recommendations",
-                "Login to save favorites",
-                "Create account for faster booking",
-            ],
-            "public_features": [
-                "View car details",
-                "Check availability",
-                "Compare prices",
-            ],
-        }
-
-
-# Global exception handlers - UPDATED with authentication context
+# Global exception handlers
+# NOTE: exception handlers must return an actual Response (JSONResponse
+# here) — returning a plain dict crashes with "'dict' object is not
+# callable", since Starlette tries to call whatever's returned as an ASGI
+# response. Also: @app.exception_handler(404) intercepts EVERY
+# HTTPException(status_code=404) raised anywhere in the app (e.g. "Car not
+# found", "User not found"), not just genuinely unmatched routes — so this
+# preserves the real per-route detail message instead of overwriting every
+# 404 with the same generic text.
 @app.exception_handler(404)
 async def not_found_handler(request, exc):
-    return {
-        "error": "Endpoint not found",
-        "message": "The requested endpoint does not exist",
-        "documentation": "/docs",
-        "available_endpoints": {
-            "auth": "/auth/* (register, login, logout)",
-            "user": "/profile (requires authentication)",
-            "admin": "/admin/* (requires admin privileges)",
-            "public": "/cars, /health, /",
+    detail = getattr(exc, "detail", None) or "The requested endpoint does not exist"
+    return JSONResponse(
+        status_code=404,
+        content={
+            "error": "Not found",
+            "message": detail,
+            "documentation": "/docs",
         },
-    }
+    )
 
 
 @app.exception_handler(500)
 async def internal_error_handler(request, exc):
-    return {
-        "error": "Internal server error",
-        "message": "Something went wrong on our end",
-        "support": "Please contact support if this persists",
-        "troubleshooting": {
-            "check_token": "Ensure JWT token is valid and not expired",
-            "check_permissions": "Verify account has required privileges",
-            "health_check": "/health",
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Internal server error",
+            "message": "Something went wrong on our end",
+            "support": "Please contact support if this persists",
+            "troubleshooting": {
+                "check_token": "Ensure JWT token is valid and not expired",
+                "check_permissions": "Verify account has required privileges",
+                "health_check": "/health",
+            },
         },
-    }
+    )
