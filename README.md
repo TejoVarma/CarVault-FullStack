@@ -38,6 +38,18 @@ uvicorn app.main:app --reload --port 8000
 
 API docs: http://localhost:8000/docs
 
+### Tests
+
+```bash
+cd server
+pip install -r requirements-dev.txt
+pytest
+```
+
+The tests run against `car_rental_test` (never the dev database: they refuse to start unless the
+database name ends in `_test`), build its schema with Alembic, and empty every table after each test.
+Point them elsewhere with `TEST_DATABASE_URL`.
+
 ### 3. Frontend
 
 ```bash

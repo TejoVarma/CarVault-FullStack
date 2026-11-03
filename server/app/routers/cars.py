@@ -35,7 +35,12 @@ def list_my_cars(
     db: Session = Depends(get_db),
 ):
     """List all of the current car owner's own cars, including inactive ones."""
-    cars = db.query(Car).filter(Car.owner_id == current_car_owner["id"]).all()
+    cars = (
+        db.query(Car)
+        .filter(Car.owner_id == current_car_owner["id"])
+        .order_by(Car.created_at.desc(), Car.id)
+        .all()
+    )
     return [CarResponse.model_validate(car) for car in cars]
 
 
@@ -65,7 +70,9 @@ def browse_cars(
     if max_price is not None:
         query = query.filter(Car.daily_rate <= max_price)
 
-    cars = query.offset(skip).limit(limit).all()
+    # Without a total order, Postgres may return rows in any order, so pages
+    # could repeat or skip cars. id breaks ties between equal timestamps.
+    cars = query.order_by(Car.created_at.desc(), Car.id).offset(skip).limit(limit).all()
     return [CarResponse.model_validate(car) for car in cars]
 
 
