@@ -1,4 +1,5 @@
 from typing import Optional
+from uuid import UUID
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -27,7 +28,7 @@ def create_car(
 
 # IMPORTANT: this must be declared BEFORE /{car_id} — FastAPI matches routes
 # in declaration order, and "/mine" would otherwise be captured by
-# "/{car_id}" (car_id="mine") and fail UUID parsing at the database query.
+# "/{car_id}" (car_id="mine") and be rejected with a 422 as an invalid UUID.
 @router.get("/mine", response_model=list[CarResponse])
 def list_my_cars(
     current_car_owner: dict = Depends(get_current_car_owner),
@@ -69,7 +70,7 @@ def browse_cars(
 
 
 @router.get("/{car_id}", response_model=CarResponse)
-def get_car(car_id: str, db: Session = Depends(get_db)):
+def get_car(car_id: UUID, db: Session = Depends(get_db)):
     """View a single car's details. Public — only shows active listings."""
     car = db.query(Car).filter(Car.id == car_id, Car.is_active == True).first()  # noqa: E712
     if not car:
@@ -79,7 +80,7 @@ def get_car(car_id: str, db: Session = Depends(get_db)):
 
 @router.patch("/{car_id}", response_model=CarResponse)
 def update_car(
-    car_id: str,
+    car_id: UUID,
     car_data: CarUpdate,
     current_car_owner: dict = Depends(get_current_car_owner),
     db: Session = Depends(get_db),
@@ -104,7 +105,7 @@ def update_car(
 
 @router.delete("/{car_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_car(
-    car_id: str,
+    car_id: UUID,
     current_car_owner: dict = Depends(get_current_car_owner),
     db: Session = Depends(get_db),
 ):
