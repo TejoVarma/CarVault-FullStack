@@ -59,4 +59,8 @@ pnpm install
 pnpm dev
 ```
 
-App: http://localhost:5173
+App: http://localhost:3000
+
+```bash
+pnpm test        # Vitest + React Testing Library, API mocked
+```
