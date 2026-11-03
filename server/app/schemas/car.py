@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional
 from datetime import datetime
 from decimal import Decimal
@@ -124,3 +124,8 @@ class CarResponse(BaseModel):
         return str(v)
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CarPage(BaseModel):
+    items: list[CarResponse]
+    next_cursor: Optional[str] = Field(description="Pass as ?cursor= to get the next page; null on the last page")

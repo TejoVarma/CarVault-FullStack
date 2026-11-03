@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Boolean, Column, String, Integer, Numeric, Text, DateTime, ForeignKey
+from sqlalchemy import Boolean, Column, String, Integer, Numeric, Text, DateTime, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -14,6 +14,8 @@ CAR_CATEGORIES = ["sedan", "suv", "hatchback", "truck", "van", "convertible", "l
 
 class Car(Base):
     __tablename__ = "cars"
+    # Backs the browse listing's newest-first keyset pagination (read backwards).
+    __table_args__ = (Index("ix_cars_created_at_id", "created_at", "id"),)
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
 
