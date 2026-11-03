@@ -229,6 +229,8 @@ transaction_*.json
 # Database dumps
 *.sql
 *.dump
+# ...but not the Postgres init scripts docker-compose mounts
+!docker/postgres/init/*.sql
 
 # Car image uploads
 /server/uploads/
