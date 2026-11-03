@@ -3,11 +3,13 @@ from uuid import UUID
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import tuple_
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.car import Car
-from app.schemas.car import CarCreate, CarUpdate, CarResponse
+from app.schemas.car import CarCreate, CarPage, CarUpdate, CarResponse
 from app.utils.auth_deps import get_current_car_owner
+from app.utils.pagination import decode_cursor, encode_cursor
 
 router = APIRouter()
 
@@ -38,26 +40,29 @@ def list_my_cars(
     cars = (
         db.query(Car)
         .filter(Car.owner_id == current_car_owner["id"])
-        .order_by(Car.created_at.desc(), Car.id)
+        .order_by(Car.created_at.desc(), Car.id.desc())
         .all()
     )
     return [CarResponse.model_validate(car) for car in cars]
 
 
-@router.get("", response_model=list[CarResponse])
+@router.get("", response_model=CarPage, responses={422: {"description": "Invalid cursor or filter value"}})
 def browse_cars(
     category: Optional[str] = None,
     city: Optional[str] = None,
     min_price: Optional[Decimal] = Query(None, ge=0),
     max_price: Optional[Decimal] = Query(None, ge=0),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=100, description="Cars per page"),
+    cursor: Optional[str] = Query(None, description="next_cursor from the previous page"),
     db: Session = Depends(get_db),
 ):
     """
     Browse publicly listed cars. Public endpoint — no authentication
     required. Only ever returns is_active cars; owners see their full
     inventory (including inactive listings) via GET /cars/mine instead.
+
+    Keyset-paginated, newest first: pass the previous page's next_cursor to
+    get the cars that come after it. next_cursor is null on the last page.
     """
     query = db.query(Car).filter(Car.is_active == True)  # noqa: E712
 
@@ -70,10 +75,16 @@ def browse_cars(
     if max_price is not None:
         query = query.filter(Car.daily_rate <= max_price)
 
-    # Without a total order, Postgres may return rows in any order, so pages
-    # could repeat or skip cars. id breaks ties between equal timestamps.
-    cars = query.order_by(Car.created_at.desc(), Car.id).offset(skip).limit(limit).all()
-    return [CarResponse.model_validate(car) for car in cars]
+    if cursor:
+        after_created_at, after_id = decode_cursor(cursor)
+        query = query.filter(tuple_(Car.created_at, Car.id) < tuple_(after_created_at, after_id))
+
+    # (created_at, id) is a total order, so a cursor points at exactly one
+    # place in the list. Fetching one extra row tells us whether a next page exists.
+    rows = query.order_by(Car.created_at.desc(), Car.id.desc()).limit(limit + 1).all()
+    page = rows[:limit]
+    next_cursor = encode_cursor(page[-1].created_at, page[-1].id) if len(rows) > limit else None
+    return CarPage(items=[CarResponse.model_validate(car) for car in page], next_cursor=next_cursor)
 
 
 @router.get("/{car_id}", response_model=CarResponse)
