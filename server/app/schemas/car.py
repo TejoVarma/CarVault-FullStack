@@ -1,4 +1,4 @@
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, ConfigDict, field_validator
 from typing import Optional
 from datetime import datetime
 from decimal import Decimal
@@ -19,25 +19,29 @@ class CarCreate(BaseModel):
     daily_rate: Decimal
     description: Optional[str] = None
 
-    @validator("category")
+    @field_validator("category")
+    @classmethod
     def validate_category(cls, v):
         if v not in CAR_CATEGORIES:
             raise ValueError(f"Category must be one of: {', '.join(CAR_CATEGORIES)}")
         return v
 
-    @validator("year")
+    @field_validator("year")
+    @classmethod
     def validate_year(cls, v):
         if v < 1980 or v > CURRENT_YEAR + 1:
             raise ValueError(f"Year must be between 1980 and {CURRENT_YEAR + 1}")
         return v
 
-    @validator("daily_rate")
+    @field_validator("daily_rate")
+    @classmethod
     def validate_daily_rate(cls, v):
         if v <= 0:
             raise ValueError("Daily rate must be greater than 0")
         return v
 
-    @validator("make", "model", "city")
+    @field_validator("make", "model", "city")
+    @classmethod
     def validate_not_blank(cls, v):
         if not v.strip():
             raise ValueError("This field cannot be blank")
@@ -57,21 +61,41 @@ class CarUpdate(BaseModel):
     description: Optional[str] = None
     is_active: Optional[bool] = None
 
-    @validator("category")
+    # Optional here means "may be left out", not "may be cleared": these
+    # columns are NOT NULL, so an explicit null would reach the database
+    # and fail there as a 500.
+    @field_validator("make", "model", "year", "category", "city", "daily_rate", "is_active", mode="before")
+    @classmethod
+    def reject_null(cls, v):
+        if v is None:
+            raise ValueError("This field cannot be null")
+        return v
+
+    @field_validator("make", "model", "city")
+    @classmethod
+    def validate_not_blank(cls, v):
+        if not v.strip():
+            raise ValueError("This field cannot be blank")
+        return v.strip()
+
+    @field_validator("category")
+    @classmethod
     def validate_category(cls, v):
-        if v is not None and v not in CAR_CATEGORIES:
+        if v not in CAR_CATEGORIES:
             raise ValueError(f"Category must be one of: {', '.join(CAR_CATEGORIES)}")
         return v
 
-    @validator("year")
+    @field_validator("year")
+    @classmethod
     def validate_year(cls, v):
-        if v is not None and (v < 1980 or v > CURRENT_YEAR + 1):
+        if v < 1980 or v > CURRENT_YEAR + 1:
             raise ValueError(f"Year must be between 1980 and {CURRENT_YEAR + 1}")
         return v
 
-    @validator("daily_rate")
+    @field_validator("daily_rate")
+    @classmethod
     def validate_daily_rate(cls, v):
-        if v is not None and v <= 0:
+        if v <= 0:
             raise ValueError("Daily rate must be greater than 0")
         return v
 
@@ -93,10 +117,10 @@ class CarResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    @validator("id", "owner_id", pre=True)
+    @field_validator("id", "owner_id", mode="before")
+    @classmethod
     def convert_uuid_to_str(cls, v):
         # Same UUID-to-str gotcha as UserResponse — see learning-notes/15.
         return str(v)
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

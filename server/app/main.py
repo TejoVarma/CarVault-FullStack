@@ -8,12 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import os
 import app.utils.cloudinary_config  # noqa: F401 (side-effecting import: configures cloudinary from env)
-from app.database import engine, Base
 from app.routers import auth, roles, users, cars
 from app.utils.auth_deps import get_current_user, get_current_admin
-
-# Create all database tables
-Base.metadata.create_all(bind=engine)
 
 # Create FastAPI application with environment-based configuration
 app = FastAPI(

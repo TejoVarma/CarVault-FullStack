@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, validator
+from pydantic import BaseModel, EmailStr, ConfigDict, field_validator
 from typing import Optional, List, Dict
 from datetime import datetime
 
@@ -13,13 +13,15 @@ class UserRegister(BaseModel):
     phone: Optional[str] = None
     initial_role: str = "customer"  # "customer" or "car_owner"
 
-    @validator("initial_role")
+    @field_validator("initial_role")
+    @classmethod
     def validate_initial_role(cls, v):
         if v not in ("customer", "car_owner"):
             raise ValueError("Initial role must be 'customer' or 'car_owner'")
         return v
 
-    @validator("password")
+    @field_validator("password")
+    @classmethod
     def validate_password(cls, v):
         if len(v) < 8:
             raise ValueError("Password must be at least 8 characters long")
@@ -31,7 +33,8 @@ class UserRegister(BaseModel):
             raise ValueError("Password must contain at least one digit")
         return v
 
-    @validator("first_name", "last_name")
+    @field_validator("first_name", "last_name")
+    @classmethod
     def validate_names(cls, v):
         if not v.strip():
             raise ValueError("Name cannot be empty")
@@ -39,7 +42,8 @@ class UserRegister(BaseModel):
             raise ValueError("Name must be at least 2 characters long")
         return v.strip().title()  # Capitalize properly
 
-    @validator("phone")
+    @field_validator("phone")
+    @classmethod
     def validate_phone(cls, v):
         if v is not None and v.strip():
             # Basic phone validation
@@ -76,14 +80,14 @@ class UserResponse(BaseModel):
     business_name: Optional[str] = None
     profile_picture_url: Optional[str] = None
 
-    @validator("id", pre=True)
+    @field_validator("id", mode="before")
+    @classmethod
     def convert_id_to_str(cls, v):
         # new_user.id is a Python UUID object (see models/user.py); model_validate()
         # reads it as-is, unlike the old manual `str(new_user.id)` construction.
         return str(v)
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BusinessProfileCreate(BaseModel):
@@ -94,7 +98,8 @@ class BusinessProfileCreate(BaseModel):
     business_phone: str
     pickup_instructions: Optional[str] = None
 
-    @validator("business_name")
+    @field_validator("business_name")
+    @classmethod
     def validate_business_name(cls, v):
         if len(v.strip()) < 2:
             raise ValueError("Business name must be at least 2 characters")
@@ -133,7 +138,8 @@ class PasswordChange(BaseModel):
     current_password: str
     new_password: str
 
-    @validator("new_password")
+    @field_validator("new_password")
+    @classmethod
     def validate_new_password(cls, v):
         if len(v) < 8:
             raise ValueError("Password must be at least 8 characters long")
@@ -172,12 +178,12 @@ class UserProfile(BaseModel):
     updated_at: datetime
     last_login: Optional[datetime]
 
-    @validator("id", pre=True)
+    @field_validator("id", mode="before")
+    @classmethod
     def convert_id_to_str(cls, v):
         return str(v)
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserProfileUpdate(BaseModel):
@@ -196,7 +202,8 @@ class UserProfileUpdate(BaseModel):
     emergency_contact_phone: Optional[str] = None
     emergency_contact_relationship: Optional[str] = None
 
-    @validator("phone", "emergency_contact_phone")
+    @field_validator("phone", "emergency_contact_phone")
+    @classmethod
     def validate_phone_digits(cls, v):
         if v is not None and v.strip():
             cleaned = "".join(filter(str.isdigit, v))
